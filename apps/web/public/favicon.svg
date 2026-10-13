@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="PlayChess">
+  <rect width="16" height="16" fill="#f0e2c4"/>
+  <rect x="16" width="16" height="16" fill="#3d6b4f"/>
+  <rect y="16" width="16" height="16" fill="#3d6b4f"/>
+  <rect x="16" y="16" width="16" height="16" fill="#f0e2c4"/>
+  <circle cx="16" cy="15" r="4.5" fill="#1c1916"/>
+  <rect x="14.4" y="8" width="3.2" height="3.2" fill="#1c1916"/>
+</svg>

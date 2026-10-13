@@ -1,0 +1,25 @@
+{
+  "name": "playchess",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "PlayChess — a server-authoritative chess platform.",
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @playchess/web dev",
+    "build": "pnpm --filter @playchess/web build",
+    "preview": "pnpm --filter @playchess/web preview",
+    "lint": "oxlint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "test:e2e": "pnpm --filter @playchess/web test:e2e"
+  },
+  "devDependencies": {
+    "oxlint": "^1.81.0",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.4"
+  }
+}
