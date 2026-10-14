@@ -2,6 +2,7 @@ import { AppShell } from "@/components/shell/app-shell.tsx";
 import { HomePage } from "@/routes/home-page.tsx";
 import { NotFoundPage } from "@/routes/not-found-page.tsx";
 import { PlaceholderPage } from "@/routes/placeholder-page.tsx";
+import { LocalGamePage } from "@/routes/local-game-page.tsx";
 import { PlayPage } from "@/routes/play-page.tsx";
 import { RouteErrorPage } from "@/routes/route-error-page.tsx";
 import { SettingsPage } from "@/routes/settings-page.tsx";
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: "play", element: <PlayPage /> },
+      { path: "play/local", element: <LocalGamePage /> },
       {
         path: "review",
         element: (

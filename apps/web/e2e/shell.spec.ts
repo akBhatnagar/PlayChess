@@ -14,6 +14,17 @@ test("home, clock choice, and board theme", async ({ page }) => {
   await expect(page.getByRole("img", { name: /walnut board/i })).toBeVisible();
 });
 
+test("a local game accepts a move", async ({ page }) => {
+  await page.goto("/play");
+  await page.getByRole("button", { name: "Start local game" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Local game" })).toBeVisible();
+  await page.getByRole("button", { name: /e2, white pawn/ }).click();
+  await page.getByRole("button", { name: /e4, empty/ }).click();
+  await expect(page.getByRole("button", { name: "Move 1, e4" })).toBeVisible();
+  await expect(page.getByRole("timer", { name: "White clock" })).toBeVisible();
+  await expect(page.getByRole("timer", { name: "Black clock" })).toBeVisible();
+});
+
 test("mobile menu reaches the lobby", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");

@@ -13,8 +13,8 @@ const notes = [
     body: "Club green, walnut, or ocean. Coordinates and which side sits at the bottom stay with this browser.",
   },
   {
-    title: "Results will belong to the server",
-    body: "When live games arrive, the clock, the move, and the result are committed together. The browser only displays them.",
+    title: "A local game, then the server",
+    body: "Local games follow the clock and the chess rules in this browser. When live games arrive, the same rules commit on the server.",
   },
 ] as const;
 
@@ -30,9 +30,8 @@ export function HomePage() {
             A board, a clock, and a record of every move.
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            PlayChess is a chess room in the browser. This first build is the room itself: the
-            layout, the clocks, and a board whose colours follow you. Local games, online matches,
-            and review come next.
+            PlayChess is a chess room in the browser. Play both sides of a local game, retune the
+            board, and keep the move list in this tab. Online matches and saved games come next.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button asChild className="h-11 px-5 text-base">

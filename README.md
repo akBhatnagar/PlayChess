@@ -2,7 +2,7 @@
 
 PlayChess is a browser chess club. Live games will be decided on the server: the move, the clock, and the result commit together. This repository is the greenfield build for [playchess.akshaybhatnagar.in](https://playchess.akshaybhatnagar.in).
 
-**Milestone 1 is the room, not the game.** You can move through the shell, choose one of the nine clocks, and change the board's colours, coordinates, and orientation. Those appearance choices stay in this browser. Local chess, accounts, multiplayer, bots, and deployment are later milestones.
+**Milestone 2 is local chess.** You can move through the shell, choose one of the nine clocks, and play both sides on a board that only accepts legal moves. Clocks, promotions, castling, en passant, checkmate, stalemate, draws, resignation, and replay are in this tab. Appearance choices stay in this browser. Accounts, multiplayer, bots, and deployment are later milestones.
 
 Nothing has been deployed. The DigitalOcean Droplet, DNS, and Nginx are unchanged. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) before any server work.
 
@@ -40,7 +40,7 @@ pnpm test:e2e
 | Path | Role |
 | --- | --- |
 | `apps/web` | React, Vite, Tailwind, shadcn/ui shell |
-| `packages/chess-core` | Time controls, presets, rating-pool classification |
+| `packages/chess-core` | Time controls, local game commands, clocks, chess.js rules |
 | `packages/theme-config` | Board themes and guest settings |
 | `packages/validation` | Server and public environment schemas |
 | `docs/ARCHITECTURE.md` | Architecture, data model, clock rules, milestones |
@@ -55,8 +55,8 @@ Presets are `1+0`, `2+1`, `3+0`, `3+2`, `5+0`, `5+3`, `10+0`, `15+10`, and `30+0
 
 | Milestone | What | State |
 | --- | --- | --- |
-| 1 | Workspace, design system, shell, CI, env validation | Done in this tree |
-| 2 | Local board, rules, clocks, replay | Next |
+| 1 | Workspace, design system, shell, CI, env validation | Done |
+| 2 | Local board, rules, clocks, replay | Done in this tree |
 | 3 | Accounts, PostgreSQL, Prisma, saved games | Not started |
 | 4 | Multiplayer | Not started |
 | 5 | Stockfish bots, after the licence review | Not started |

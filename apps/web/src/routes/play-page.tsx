@@ -3,8 +3,11 @@ import {
   ratingPoolLabel,
   type TimeControlPreset,
 } from "@playchess/chess-core";
+import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
+import { useLocalGame } from "@/state/local-game.ts";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 
 function presetOrFirst(id: string): TimeControlPreset {
   const preset = TIME_CONTROL_PRESETS.find((item) => item.id === id) ?? TIME_CONTROL_PRESETS[0];
@@ -38,6 +41,9 @@ function SideLine({ label, initialMs, incrementMs }: { label: string; initialMs:
 export function PlayPage() {
   const [selectedId, setSelectedId] = useState<string>("blitz-5-3");
   const selected = presetOrFirst(selectedId);
+  const start = useLocalGame((state) => state.start);
+  const game = useLocalGame((state) => state.game);
+  const navigate = useNavigate();
 
   return (
     <div className="grid gap-8">
@@ -45,8 +51,9 @@ export function PlayPage() {
         <p className="text-sm font-semibold tracking-[0.18em] text-primary uppercase">Lobby</p>
         <h1 className="mt-2 text-4xl sm:text-5xl">Choose a clock</h1>
         <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
-          These are the PlayChess presets. The one you select is the clock a later game will
-          store. Local play is the next milestone, so this page stops at the choice.
+          Pick one of the nine PlayChess clocks, then start a local game. You play both sides
+          from this seat. The result is decided in the browser, with the same rules the server
+          will use later.
         </p>
       </header>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,22rem)]">
@@ -103,6 +110,26 @@ export function PlayPage() {
           <p className="text-sm leading-relaxed text-muted-foreground">
             Rated or casual is chosen when a game is created. Asymmetric time odds use the same
             fields, with each side stored separately.
+          </p>
+          <Button
+            type="button"
+            className="mt-4 h-11 w-full text-base"
+            onClick={() => {
+              start(selected.id);
+              navigate("/play/local");
+            }}
+          >
+            Start local game
+          </Button>
+          {game ? (
+            <Button asChild variant="outline" className="mt-2 h-11 w-full text-base">
+              <Link to="/play/local">Resume local game</Link>
+            </Button>
+          ) : null}
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            {game
+              ? "Starting again replaces the game already in this tab. Resume keeps the position."
+              : "The game stays in this tab until you refresh."}
           </p>
         </section>
       </div>

@@ -1,6 +1,6 @@
 # PlayChess architecture
 
-This is the plan for the greenfield build. Milestone 1 implements the workspace, the design system, the responsive shell, environment validation, and the time-control model. Later milestones follow the same document. Nothing here has been deployed.
+This is the plan for the greenfield build. Milestone 1 is the workspace, the design system, the responsive shell, environment validation, and the time-control model. Milestone 2 adds local chess in the browser: legal moves, clocks, and replay. Later milestones follow the same document. Nothing here has been deployed.
 
 ## Repository
 
@@ -24,7 +24,7 @@ The GitHub remote was not rewritten onto `origin`. History already on `main` sta
 | Validation | Zod 4 |
 | API, later | Node.js, TypeScript, Fastify, Socket.IO |
 | Database, later | PostgreSQL, Prisma migrations |
-| Rules, next milestone | chess.js, after a quick API and licence check |
+| Rules | chess.js 1.4.0 (BSD-2-Clause), inside `packages/chess-core` |
 | Engine, later | Stockfish only after the licence note in `docs/LICENSING.md` |
 | Tests | Vitest, Testing Library, Playwright |
 | Packages | pnpm workspaces |
@@ -37,7 +37,7 @@ React Router 8 requires Node.js `>= 22.22`. `.nvmrc` pins `22.23.3`.
 
 ```
 apps/web/                  React shell. Live in this milestone.
-packages/chess-core/       Time controls and rating-pool classification. Live.
+packages/chess-core/       Time controls, local game commands, and clocks. Live.
 packages/theme-config/     Guest appearance settings. Live.
 packages/validation/       Server and public environment schemas. Live.
 packages/shared-types/     Later, when the API and client share response types.
@@ -103,19 +103,21 @@ classical  otherwise
 
 `3 + 0`, `10 + 0`, and `30 + 0` sit on the boundaries and are blitz, rapid, and classical. Time odds use the longer side so a one-minute-versus-ten-minute game is rapid, not bullet. `rated` is not part of the preset. It is chosen when a game is created.
 
-### Clock rules for the next milestone
+### Clock rules
 
-These rules are specified now so the local-play milestone can test them. They are not implemented yet.
+Local games run these rules in the browser. `packages/chess-core` owns the functions, and a later server milestone will call the same ones. An online result will not be decided in the browser. The client clock stays a display estimate between snapshots.
 
-- The server clock is authoritative. The client clock is a display estimate between snapshots.
-- Elapsed time for the side to move is `serverNow - turnStartedAt`.
-- A move is late when elapsed time is greater than or equal to the remaining time. The game ends as a timeout on that side, and the move is not applied. No increment is added.
+- Elapsed time for the side to move is `now - turnStartedAt`. Tests pass `now`; they do not sleep.
+- A move is late when elapsed time is greater than or equal to the remaining time. The game ends as a timeout on that side, and the move is not applied. No increment is added. The flagged side is stored at 0.
 - A move is in time when elapsed time is strictly less than the remaining time. Remaining time becomes `remaining - elapsed + increment` after the move is accepted.
-- Increment applies after every accepted move, including ply 1. It does not apply on timeout, resignation, or a rejected move.
-- Move, position, clocks, and game version commit in one transaction. A repeated command id does not move or increment twice.
-- Concurrent moves for one game are serialized. The command must carry the expected game version or ply. A stale version is rejected.
-- Tests will use a controllable clock, not sleeps.
+- Increment applies after every accepted move, including ply 1. It does not apply on timeout, resignation, an agreed draw, or a rejected move.
+- Move, position, clocks, and game version commit together. A repeated command id returns the current game and does not move or increment twice.
+- The command carries the expected game version. A stale version is rejected and the clocks stay as they were.
+- Resignation and an accepted draw subtract elapsed time and then stop the clock, without adding increment. A draw offer itself does not stop or rewind the clock.
+- chess.js 1.4.0 reports threefold repetition and the fifty-move rule through `isDraw()` as soon as the count is reached. Local games end on that signal. They are not claim-only. Checkmate, stalemate, insufficient material, timeout, resignation, and agreed draws are stored as their own terminations.
 - Delay modes stay unimplemented until their semantics are written with the same level of detail.
+
+When multiplayer exists, the server clock is the one that commits. Concurrent moves for one game are serialized there. The browser keeps showing the estimate between snapshots.
 
 ## Data model
 
@@ -177,15 +179,15 @@ Move transaction, when multiplayer exists:
 
 ## Design system
 
-The interface is a chess room, not an admin dashboard. The board is the largest object on the home and settings pages.
+The interface is a chess room, not an admin dashboard. The board is the largest object on the home, settings, and local-game pages.
 
 - Type: Fraunces for headings, Source Sans 3 for text. Both are SIL Open Font licensed and self-hosted through Fontsource.
 - Colour: warm paper and a deep green in the light room; a green-black room with a light green action colour in the dark room.
 - Boards: Club green, Walnut, Ocean. Tokens are CSS variables switched by `data-board-theme` on the document, and on each theme swatch so the swatches stay accurate.
 - Pieces: original geometric drawings. One set.
-- Controls that change pixels today: room colour, board theme, coordinates, flip, highlight ring on the empty e4 square.
+- Controls that change pixels today: room colour, board theme, coordinates, flip, highlight ring on the empty e4 square of the preview, and the same tokens on the local board (last move, legal moves, and the king in check).
 - Settings persist in `localStorage` for this browser. Signed-in persistence waits for accounts.
-- Shell routes: Home, Play (preset picker), Review, History, Profile, Settings, Sign in. Review, history, profile, and sign-in explain what will arrive. They do not pretend the feature works.
+- Shell routes: Home, Play (preset picker), Play local, Review, History, Profile, Settings, Sign in. Review, history, profile, and sign-in explain what will arrive. They do not pretend the feature works. The local game is decided in this tab and is cleared on refresh.
 - Accessibility in this shell: skip link, landmarks, button and link names, visible focus, `prefers-reduced-motion`, contrast-minded ink and muted colours, 44px menu target, whole-row checkbox labels.
 
 ## Security decisions already in force
@@ -197,12 +199,12 @@ The interface is a chess room, not an admin dashboard. The board is the largest 
 
 ## Milestones
 
-Section 15 of the specification is the working order. This delivery is milestone 1. Section 14 called the same work milestone 0.
+Section 15 of the specification is the working order. This delivery is milestone 2. Section 14 called the shell work milestone 0.
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
-| 1 | Workspace, design system, responsive shell, CI, env validation | This commit |
-| 2 | Local board, legal moves, clocks, replay | Next |
+| 1 | Workspace, design system, responsive shell, CI, env validation | Done |
+| 2 | Local board, legal moves, clocks, replay | Done in this tree |
 | 3 | PostgreSQL, Prisma, accounts, settings, persistence | Waiting |
 | 4 | Server-authoritative multiplayer, matchmaking, challenges, reconnect | Waiting |
 | 5 | Stockfish bots, after the licence review | Waiting |
@@ -221,4 +223,5 @@ Section 15 of the specification is the working order. This delivery is milestone
 - The Droplet already hosts other work. A later deploy must add a vhost and a Compose project named `playchess` without replacing global Nginx, publishing port 5432, or pruning other containers.
 - Delay modes are rejected on purpose. Adding one without a tested definition would make clocks ambiguous.
 - Guest settings are per browser, not per account. Signing in later must define how they merge.
-- The decorative board is a starting-position preview. It does not enforce chess rules. That is milestone 2.
+- The home and settings boards are still starting-position previews. The local game at `/play/local` is the board that enforces the rules.
+- Local games are not saved. Refreshing the tab drops the position. Persistence waits for accounts.

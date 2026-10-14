@@ -19,8 +19,8 @@ export function SettingsPage() {
         <p className="text-sm font-semibold tracking-[0.18em] text-primary uppercase">Appearance</p>
         <h1 className="mt-2 text-4xl sm:text-5xl">The board in front of you</h1>
         <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
-          Colour, coordinates, and orientation change the preview here and the board on the home
-          page. They stay in this browser until an account can keep them.
+          Colour, coordinates, and orientation change this preview, the home board, and a local
+          game. They stay in this browser until an account can keep them.
         </p>
       </header>
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">

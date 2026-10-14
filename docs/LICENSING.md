@@ -10,7 +10,7 @@ The PlayChess application licence is not chosen yet. The repository owner should
 | Fraunces | SIL Open Font License 1.1, via `@fontsource/fraunces` |
 | Source Sans 3 | SIL Open Font License 1.1, via `@fontsource/source-sans-3` |
 | UI primitives | shadcn/ui generated components, Radix primitives, Lucide icons. Their package licences apply |
-| chess.js | Not added yet |
+| chess.js 1.4.0 | BSD-2-Clause. Copyright (c) 2025, Jeff Hlywa. Used as the rules library from `packages/chess-core`. The licence text ships with the package |
 | Stockfish | Not added yet |
 | Third-party piece sets, sounds, puzzles, openings | Not added yet |
 
