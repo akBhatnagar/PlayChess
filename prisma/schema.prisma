@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Account. The public id is a UUID. Email is returned only to the signed-in user.
+/// Rating, analysis, and challenge tables are deferred until those milestones.
+/// Account deletion is not implemented. A retention policy is required before public launch.
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  username     String        @unique
+  email        String        @unique
+  passwordHash String
+  status       String        @default("active")
+  createdAt    DateTime      @default(now())
+  settings     UserSettings?
+  sessions     Session[]
+  whiteGames   Game[]        @relation("WhitePlayer")
+  blackGames   Game[]        @relation("BlackPlayer")
+}
+
+model Session {
+  id        String   @id
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserSettings {
+  userId          String  @id @db.Uuid
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  colorScheme     String
+  boardTheme      String
+  showCoordinates Boolean
+  flipBoard       Boolean
+  showHighlights  Boolean
+}
+
+/// A saved game. Local games record the same account on both seats.
+model Game {
+  id                 String     @id @default(uuid()) @db.Uuid
+  kind               String
+  status             String
+  result             String?
+  termination        String?
+  rated              Boolean    @default(false)
+  whiteUserId        String     @db.Uuid
+  blackUserId        String     @db.Uuid
+  white              User       @relation("WhitePlayer", fields: [whiteUserId], references: [id])
+  black              User       @relation("BlackPlayer", fields: [blackUserId], references: [id])
+  initialFen         String
+  finalFen           String
+  pgn                String
+  version            Int
+  initialTimeWhiteMs Int
+  initialTimeBlackMs Int
+  incrementWhiteMs   Int
+  incrementBlackMs   Int
+  whiteMs            Int
+  blackMs            Int
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  moves              GameMove[]
+
+  @@index([whiteUserId, createdAt])
+  @@index([blackUserId, createdAt])
+}
+
+model GameMove {
+  id        String @id @default(uuid()) @db.Uuid
+  gameId    String @db.Uuid
+  game      Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  ply       Int
+  uci       String
+  san       String
+  fen       String
+  whiteMs   Int
+  blackMs   Int
+  commandId String
+
+  @@unique([gameId, ply])
+  @@unique([gameId, commandId])
+}

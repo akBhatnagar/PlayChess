@@ -4,6 +4,7 @@ import {
   applyCommand,
   createLocalGame,
   expireIfNeeded,
+  importTranscript,
   positionAt,
   type GameCommand,
   type LocalGame,
@@ -332,6 +333,47 @@ describe("local rules", () => {
     );
     expect(game.termination).toBe("fifty-move");
     expect(game.result).toBe("1/2-1/2");
+  });
+
+  it("rebuilds a saved game from the moves and keeps a timeout that the position cannot show", () => {
+    const saved = importTranscript({
+      moves: [
+        { uci: "e2e4", whiteMs: 302_000, blackMs: 300_000, commandId: "m1" },
+        { uci: "e7e5", whiteMs: 302_000, blackMs: 299_000, commandId: "m2" },
+      ],
+      claimedResult: "0-1",
+      claimedTermination: "timeout",
+    });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) {
+      return;
+    }
+    expect(saved.transcript.status).toBe("finished");
+    expect(saved.transcript.termination).toBe("timeout");
+    expect(saved.transcript.moves.map((move) => move.san)).toEqual(["e4", "e5"]);
+    expect(saved.transcript.finalFen).toBe(saved.transcript.moves[1]?.fen);
+
+    const mate = importTranscript({
+      moves: [
+        { uci: "f2f3", whiteMs: 1, blackMs: 1, commandId: "a" },
+        { uci: "e7e5", whiteMs: 1, blackMs: 1, commandId: "b" },
+        { uci: "g2g4", whiteMs: 1, blackMs: 1, commandId: "c" },
+        { uci: "d8h4", whiteMs: 1, blackMs: 1, commandId: "d" },
+      ],
+      claimedResult: "1-0",
+      claimedTermination: "resignation",
+    });
+    expect(mate.ok).toBe(true);
+    if (!mate.ok) {
+      return;
+    }
+    expect(mate.transcript.termination).toBe("checkmate");
+    expect(mate.transcript.result).toBe("0-1");
+
+    const illegal = importTranscript({
+      moves: [{ uci: "e2e5", whiteMs: 1, blackMs: 1, commandId: "bad" }],
+    });
+    expect(illegal.ok).toBe(false);
   });
 
   it("replays each ply from the stored moves", () => {

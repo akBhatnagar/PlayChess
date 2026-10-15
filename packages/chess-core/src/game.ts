@@ -425,6 +425,133 @@ export function legalMoves(game: LocalGame): LegalMove[] {
     }));
 }
 
+export type TranscriptMove = {
+  uci: string;
+  whiteMs: number;
+  blackMs: number;
+  commandId: string;
+};
+
+export type ImportedMove = TranscriptMove & {
+  ply: number;
+  san: string;
+  fen: string;
+};
+
+export type ImportedTranscript = {
+  initialFen: string;
+  finalFen: string;
+  status: "active" | "finished";
+  result: GameResult | null;
+  termination: Termination | null;
+  pgn: string;
+  moves: ImportedMove[];
+};
+
+const CLOCK_CLAIM: readonly Termination[] = ["timeout", "resignation", "draw-agreement"];
+const MAX_TRANSCRIPT_MOVES = 600;
+
+/**
+ * Rebuild a saved local game from UCI. Positions and chess results come from
+ * the rules. Timeout, resignation, and an agreed draw are accepted only while
+ * the position is still ongoing, because those endings are not in the moves.
+ */
+export function importTranscript(input: {
+  initialFen?: string;
+  moves: readonly TranscriptMove[];
+  claimedResult?: GameResult | null;
+  claimedTermination?: Termination | null;
+}):
+  | { ok: true; transcript: ImportedTranscript }
+  | { ok: false; code: "illegal-move" | "invalid-clock" | "duplicate-command" | "too-long" | "inconsistent-result" } {
+  if (input.moves.length > MAX_TRANSCRIPT_MOVES) {
+    return { ok: false, code: "too-long" };
+  }
+
+  const seen = new Set<string>();
+  for (const move of input.moves) {
+    if (!Number.isInteger(move.whiteMs) || !Number.isInteger(move.blackMs) || move.whiteMs < 0 || move.blackMs < 0) {
+      return { ok: false, code: "invalid-clock" };
+    }
+    if (seen.has(move.commandId)) {
+      return { ok: false, code: "duplicate-command" };
+    }
+    seen.add(move.commandId);
+  }
+
+  let chess: Chess;
+  try {
+    chess = new Chess(input.initialFen);
+  } catch {
+    return { ok: false, code: "illegal-move" };
+  }
+
+  const initialFen = chess.fen();
+  const imported: ImportedMove[] = [];
+  for (const move of input.moves) {
+    const parsed = parseUci(move.uci);
+    if (!parsed) {
+      return { ok: false, code: "illegal-move" };
+    }
+    try {
+      const played = chess.move(parsed);
+      imported.push({
+        ply: imported.length + 1,
+        uci: parsed.promotion ? `${parsed.from}${parsed.to}${parsed.promotion}` : `${parsed.from}${parsed.to}`,
+        san: played.san,
+        fen: chess.fen(),
+        whiteMs: move.whiteMs,
+        blackMs: move.blackMs,
+        commandId: move.commandId,
+      });
+    } catch {
+      return { ok: false, code: "illegal-move" };
+    }
+  }
+
+  const rules = readTerminal(chess);
+  const claimedTermination = input.claimedTermination ?? null;
+  const claimedResult = input.claimedResult ?? null;
+  let status: "active" | "finished" = "active";
+  let result: GameResult | null = null;
+  let termination: Termination | null = null;
+
+  if (rules) {
+    status = "finished";
+    result = rules.result;
+    termination = rules.termination;
+  } else if (claimedTermination) {
+    const clockClaim = CLOCK_CLAIM.some((item) => item === claimedTermination);
+    const resultMatches =
+      (claimedTermination === "draw-agreement" && claimedResult === "1/2-1/2") ||
+      ((claimedTermination === "timeout" || claimedTermination === "resignation") &&
+        (claimedResult === "1-0" || claimedResult === "0-1"));
+    if (!clockClaim || !resultMatches) {
+      return { ok: false, code: "inconsistent-result" };
+    }
+    status = "finished";
+    result = claimedResult;
+    termination = claimedTermination;
+  }
+
+  if (result) {
+    chess.setHeader("Result", result);
+  }
+
+  return {
+    ok: true,
+    transcript: {
+      initialFen,
+      finalFen: chess.fen(),
+      status,
+      result,
+      termination,
+      pgn: chess.pgn(),
+      moves: imported,
+    },
+  };
+}
+
 export function positionAt(game: LocalGame, ply: number): PositionView {
   if (!Number.isInteger(ply) || ply < 0 || ply > game.moves.length) {
     throw new Error(`Ply ${ply} is outside 0..${game.moves.length}.`);

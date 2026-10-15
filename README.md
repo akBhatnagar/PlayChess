@@ -2,9 +2,9 @@
 
 PlayChess is a browser chess club. Live games will be decided on the server: the move, the clock, and the result commit together. This repository is the greenfield build for [playchess.akshaybhatnagar.in](https://playchess.akshaybhatnagar.in).
 
-**Milestone 2 is local chess.** You can move through the shell, choose one of the nine clocks, and play both sides on a board that only accepts legal moves. Clocks, promotions, castling, en passant, checkmate, stalemate, draws, resignation, and replay are in this tab. Appearance choices stay in this browser. Accounts, multiplayer, bots, and deployment are later milestones.
+**Milestone 3 adds accounts and saved games.** You can still play both sides locally without an account. Signing in stores the game, the appearance settings, and a replay. The server replays the moves with chess.js and does not trust a client result. Multiplayer and bots are later milestones.
 
-Nothing has been deployed. The DigitalOcean Droplet, DNS, and Nginx are unchanged. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) before any server work.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the Droplet steps. Production secrets stay out of Git.
 
 ## Run it
 
@@ -18,9 +18,21 @@ pnpm install
 pnpm dev
 ```
 
-The app is at http://127.0.0.1:4317.
+The app is at http://127.0.0.1:4317. The dev server proxies `/api` to the API on port 4318.
 
-Copy [.env.example](.env.example) to `.env` when the API exists. The example values are placeholders. They are valid for local checks and rejected if `NODE_ENV=production`.
+Copy [.env.example](.env.example) when you run the API in Docker Compose. Those placeholders are valid for local checks and rejected if `NODE_ENV=production`. Against a Postgres already listening on this machine, point `DATABASE_URL` at it and keep `SESSION_SECRET` at least 32 characters:
+
+```bash
+export DATABASE_URL=postgresql://playchess:playchess@127.0.0.1:5432/playchess
+export SESSION_SECRET=local-dev-session-secret-32-characters-min
+export WEB_ORIGIN=http://127.0.0.1:4317
+export API_HOST=127.0.0.1
+export API_PORT=4318
+pnpm exec prisma migrate deploy
+pnpm dev:api
+```
+
+`pnpm dev` and `pnpm dev:api` run together for sign-in and saving. Guest play works if the API is down.
 
 ## Checks
 
@@ -40,11 +52,14 @@ pnpm test:e2e
 | Path | Role |
 | --- | --- |
 | `apps/web` | React, Vite, Tailwind, shadcn/ui shell |
+| `apps/api` | Fastify accounts, saved games, and the production static host |
+| `prisma` | PostgreSQL schema and the init migration |
 | `packages/chess-core` | Time controls, local game commands, clocks, chess.js rules |
 | `packages/theme-config` | Board themes and guest settings |
 | `packages/validation` | Server and public environment schemas |
+| `deploy` | Nginx site template and a Postgres backup script |
 | `docs/ARCHITECTURE.md` | Architecture, data model, clock rules, milestones |
-| `docs/DEPLOYMENT.md` | Droplet plan, waiting for approval |
+| `docs/DEPLOYMENT.md` | Droplet plan |
 | `docs/LICENSING.md` | Fonts, original pieces, and the Stockfish hold |
 
 ## Clocks
@@ -57,11 +72,11 @@ Presets are `1+0`, `2+1`, `3+0`, `3+2`, `5+0`, `5+3`, `10+0`, `15+10`, and `30+0
 | --- | --- | --- |
 | 1 | Workspace, design system, shell, CI, env validation | Done |
 | 2 | Local board, rules, clocks, replay | Done in this tree |
-| 3 | Accounts, PostgreSQL, Prisma, saved games | Not started |
+| 3 | Accounts, PostgreSQL, Prisma, saved games | Done in this tree |
 | 4 | Multiplayer | Not started |
 | 5 | Stockfish bots, after the licence review | Not started |
 | 6 | PGN, FEN, analysis | Not started |
 | 7 | Ratings and statistics | Not started |
-| 8 | Deploy to the existing Droplet | Blocked on your approval |
+| 8 | Deploy to the existing Droplet | Files are in the repo; the server step needs SSH |
 | 9 | Hardening | Not started |
 | 10 | Expo app | After the web MVP |

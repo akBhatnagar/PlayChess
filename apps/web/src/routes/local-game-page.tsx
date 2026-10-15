@@ -10,8 +10,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.tsx";
 import { cn } from "@/lib/utils.ts";
+import { saveLocalGame } from "@/lib/api.ts";
 import { useGuestSettings } from "@/state/guest-settings.ts";
 import { useLocalGame } from "@/state/local-game.ts";
+import { useSession } from "@/state/session.ts";
 import {
   displayedClockMs,
   legalMoves,
@@ -271,7 +273,7 @@ export function LocalGamePage() {
               </p>
             ) : (
               <p className="mt-2 text-muted-foreground">
-                Decided in this browser, with the same rules the server will use later.
+                Decided in this browser, with the same rules the server checks when you save.
               </p>
             )}
             {notice ? <p className="mt-2 text-destructive">{notice}</p> : null}
@@ -357,8 +359,9 @@ export function LocalGamePage() {
               Resign
             </Button>
           </div>
+          <SaveLocalGame />
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Refreshing the tab clears this game. Online play is not available yet.
+            Refreshing the tab clears the live board. A saved copy stays on the account. Online play is not available yet.
           </p>
         </aside>
       </div>
@@ -423,6 +426,77 @@ export function LocalGamePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function SaveLocalGame() {
+  const session = useSession();
+  const game = useLocalGame((state) => state.game);
+  const savedGameId = useLocalGame((state) => state.savedGameId);
+  const savedVersion = useLocalGame((state) => state.savedVersion);
+  const noteSaved = useLocalGame((state) => state.noteSaved);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!game) {
+    return null;
+  }
+
+  if (!session.data) {
+    return (
+      <p className="text-sm">
+        <Link to="/sign-in" className="font-semibold text-primary underline-offset-4 hover:underline">
+          Sign in to save this game
+        </Link>
+      </p>
+    );
+  }
+
+  const saved = savedGameId !== null && savedVersion === game.version;
+
+  return (
+    <div className="grid gap-2">
+      {saved && savedGameId ? (
+        <Button asChild variant="outline" className="h-11">
+          <Link to={`/review/${savedGameId}`}>Saved. Open the replay</Link>
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          className="h-11"
+          disabled={pending}
+          onClick={() => {
+            const version = game.version;
+            setPending(true);
+            setError(null);
+            void saveLocalGame({
+              initialFen: game.initialFen,
+              claimedResult: game.result,
+              claimedTermination: game.termination,
+              moves: game.moves.map((move) => ({
+                uci: move.uci,
+                whiteMs: move.whiteMs,
+                blackMs: move.blackMs,
+                commandId: move.commandId,
+              })),
+              timeControl: game.timeControl,
+            }).then((result) => {
+              setPending(false);
+              if ("error" in result) {
+                setError(result.error);
+                return;
+              }
+              if (useLocalGame.getState().game?.version === version) {
+                noteSaved(result.id, version);
+              }
+            });
+          }}
+        >
+          {pending ? "Saving…" : "Save to your account"}
+        </Button>
+      )}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }

@@ -25,6 +25,14 @@ test("a local game accepts a move", async ({ page }) => {
   await expect(page.getByRole("timer", { name: "Black clock" })).toBeVisible();
 });
 
+test("sign-in offers email and password", async ({ page }) => {
+  await page.goto("/sign-in");
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await expect(page.getByLabel("Username")).toBeVisible();
+});
+
 test("mobile menu reaches the lobby", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");

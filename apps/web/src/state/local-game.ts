@@ -28,6 +28,9 @@ type LocalPlayState = {
   tick: () => void;
   review: (ply: number | null) => void;
   reset: () => void;
+  savedGameId: string | null;
+  savedVersion: number | null;
+  noteSaved: (id: string, version: number) => void;
 };
 
 let commandSeq = 0;
@@ -112,7 +115,7 @@ function apply(
   const nowMs = nowFn();
   const result = applyCommand(game, commandWithMeta(game, nowMs, body));
   if (result.ok) {
-    set({ game: result.game, reviewPly: null, nowMs, notice: null });
+    set({ game: result.game, reviewPly: null, nowMs, notice: null, savedGameId: null, savedVersion: null });
   } else {
     set({ nowMs, notice: noticeFor(result) });
   }
@@ -125,6 +128,8 @@ export const useLocalGame = create<LocalPlayState>((set, get) => ({
   reviewPly: null,
   nowMs: nowFn(),
   notice: null,
+  savedGameId: null,
+  savedVersion: null,
   start: (presetId) => {
     const preset = presetById(presetId);
     if (!preset) {
@@ -137,6 +142,8 @@ export const useLocalGame = create<LocalPlayState>((set, get) => ({
       reviewPly: null,
       nowMs,
       notice: null,
+      savedGameId: null,
+      savedVersion: null,
     });
   },
   load: (game) => {
@@ -146,6 +153,8 @@ export const useLocalGame = create<LocalPlayState>((set, get) => ({
       reviewPly: null,
       nowMs: nowFn(),
       notice: null,
+      savedGameId: null,
+      savedVersion: null,
     });
   },
   move: (uci) => apply(get, set, { type: "move", uci }),
@@ -188,7 +197,7 @@ export const useLocalGame = create<LocalPlayState>((set, get) => ({
     }
     const next = expireIfNeeded(game, nowMs, nextCommandId());
     if (next !== game) {
-      set({ game: next, reviewPly: null, nowMs, notice: null });
+      set({ game: next, reviewPly: null, nowMs, notice: null, savedGameId: null, savedVersion: null });
       return;
     }
     if (previous !== nowMs) {
@@ -205,6 +214,11 @@ export const useLocalGame = create<LocalPlayState>((set, get) => ({
       reviewPly: null,
       nowMs: nowFn(),
       notice: null,
+      savedGameId: null,
+      savedVersion: null,
     });
+  },
+  noteSaved: (id, version) => {
+    set({ savedGameId: id, savedVersion: version });
   },
 }));

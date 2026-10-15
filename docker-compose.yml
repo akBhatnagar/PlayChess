@@ -1,0 +1,30 @@
+name: playchess
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: playchess
+      POSTGRES_PASSWORD: playchess
+      POSTGRES_DB: playchess
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - playchess-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playchess -d playchess"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:4318:4318"
+
+volumes:
+  playchess-pg:

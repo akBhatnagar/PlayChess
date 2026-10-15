@@ -91,6 +91,22 @@ describe("PlayChess shell", () => {
     expect(screen.getByRole("heading", { name: /off the board/i })).toBeInTheDocument();
   });
 
+  it("offers email and password on the sign-in page", async () => {
+    const user = userEvent.setup();
+    renderAt("/sign-in");
+    expect(screen.getByRole("heading", { level: 1, name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create an account" }));
+    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+  });
+
+  it("asks a guest to sign in before showing history", async () => {
+    renderAt("/history");
+    expect(await screen.findByText("Sign in to see games saved to an account.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Saved games" })).toBeInTheDocument();
+  });
+
   it("opens the menu", async () => {
     const user = userEvent.setup();
     renderAt("/");

@@ -1,7 +1,10 @@
 import { BoardPreview } from "@/components/board/board-preview.tsx";
+import { patchSettings } from "@/lib/api.ts";
 import { cn } from "@/lib/utils.ts";
 import { useGuestSettings } from "@/state/guest-settings.ts";
-import { boardThemeDefinitions, colorSchemes, type BoardThemeId, type ColorScheme } from "@playchess/theme-config";
+import { useSession } from "@/state/session.ts";
+import { boardThemeDefinitions, colorSchemes, type BoardThemeId, type ColorScheme, type GuestSettings } from "@playchess/theme-config";
+import { useState } from "react";
 
 const schemeLabels: Record<ColorScheme, string> = {
   system: "System",
@@ -12,6 +15,19 @@ const schemeLabels: Record<ColorScheme, string> = {
 export function SettingsPage() {
   const settings = useGuestSettings((state) => state.settings);
   const update = useGuestSettings((state) => state.update);
+  const session = useSession();
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+
+  function change(patch: Partial<GuestSettings>) {
+    update(patch);
+    if (!session.data) {
+      setSyncNote(null);
+      return;
+    }
+    void patchSettings(patch).then((ok) => {
+      setSyncNote(ok ? "Saved to your account." : "Saved in this browser. The account did not take that change.");
+    });
+  }
 
   return (
     <div className="grid gap-8">
@@ -20,7 +36,7 @@ export function SettingsPage() {
         <h1 className="mt-2 text-4xl sm:text-5xl">The board in front of you</h1>
         <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
           Colour, coordinates, and orientation change this preview, the home board, and a local
-          game. They stay in this browser until an account can keep them.
+          game. Guests keep them in this browser. A signed-in change is also stored on the account.
         </p>
       </header>
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]">
@@ -45,7 +61,7 @@ export function SettingsPage() {
                   type="button"
                   aria-pressed={settings.colorScheme === scheme}
                   onClick={() => {
-                    update({ colorScheme: scheme });
+                    change({ colorScheme: scheme });
                   }}
                   className={cn(
                     "min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
@@ -70,7 +86,7 @@ export function SettingsPage() {
                   description={theme.description}
                   pressed={settings.boardTheme === theme.id}
                   onSelect={() => {
-                    update({ boardTheme: theme.id });
+                    change({ boardTheme: theme.id });
                   }}
                 />
               ))}
@@ -83,7 +99,7 @@ export function SettingsPage() {
               description="Files and ranks along the near edge."
               checked={settings.showCoordinates}
               onChange={(showCoordinates) => {
-                update({ showCoordinates });
+                change({ showCoordinates });
               }}
             />
             <ToggleRow
@@ -91,7 +107,7 @@ export function SettingsPage() {
               description="Turn the preview around."
               checked={settings.flipBoard}
               onChange={(flipBoard) => {
-                update({ flipBoard });
+                change({ flipBoard });
               }}
             />
             <ToggleRow
@@ -99,10 +115,11 @@ export function SettingsPage() {
               description="Show the last-move ring on e4."
               checked={settings.showHighlights}
               onChange={(showHighlights) => {
-                update({ showHighlights });
+                change({ showHighlights });
               }}
             />
           </fieldset>
+          {syncNote ? <p className="text-sm text-muted-foreground">{syncNote}</p> : null}
           <p className="text-sm leading-relaxed text-muted-foreground">
             Piece drawings on this board are original geometric shapes. Other piece sets wait
             until their licences are checked. Sound and notation preferences arrive with move lists.

@@ -1,6 +1,6 @@
 # PlayChess architecture
 
-This is the plan for the greenfield build. Milestone 1 is the workspace, the design system, the responsive shell, environment validation, and the time-control model. Milestone 2 adds local chess in the browser: legal moves, clocks, and replay. Later milestones follow the same document. Nothing here has been deployed.
+This is the plan for the greenfield build. Milestones 1 and 2 are the shell and local chess. Milestone 3 adds accounts, PostgreSQL, and saved games. Later milestones follow the same document.
 
 ## Repository
 
@@ -22,8 +22,8 @@ The GitHub remote was not rewritten onto `origin`. History already on `main` sta
 | Routing and data | React Router 8, TanStack Query |
 | Client UI state | Zustand for guest appearance settings only |
 | Validation | Zod 4 |
-| API, later | Node.js, TypeScript, Fastify, Socket.IO |
-| Database, later | PostgreSQL, Prisma migrations |
+| API | Node.js, TypeScript, Fastify. Socket.IO arrives with multiplayer |
+| Database | PostgreSQL, Prisma migrations |
 | Rules | chess.js 1.4.0 (BSD-2-Clause), inside `packages/chess-core` |
 | Engine, later | Stockfish only after the licence note in `docs/LICENSING.md` |
 | Tests | Vitest, Testing Library, Playwright |
@@ -36,18 +36,18 @@ React Router 8 requires Node.js `>= 22.22`. `.nvmrc` pins `22.23.3`.
 ## Folder structure
 
 ```
-apps/web/                  React shell. Live in this milestone.
-packages/chess-core/       Time controls, local game commands, and clocks. Live.
-packages/theme-config/     Guest appearance settings. Live.
-packages/validation/       Server and public environment schemas. Live.
-packages/shared-types/     Later, when the API and client share response types.
+apps/web/                  React shell and account pages.
+apps/api/                  Fastify accounts, saved games, and the production static host.
+packages/chess-core/       Time controls, local game commands, clocks, and transcript import.
+packages/theme-config/     Appearance settings.
+packages/validation/       Server and public environment schemas.
+packages/shared-types/     Later, when responses outgrow the current modules.
 packages/game-protocol/    Later, with Socket.IO.
-packages/api-client/       Later, when the web app calls the API.
-apps/api/                  Later. Fastify modules.
+packages/api-client/       Later, if the fetch helpers move out of the web app.
 apps/engine-worker/        Later, only if the engine runs out of process.
 apps/mobile/               After the web MVP. Expo, reusing these packages.
-prisma/                    Later, with the first migration.
-deploy/nginx/              Later, as a template. Not installed on the Droplet.
+prisma/                    Schema and the init migration.
+deploy/nginx/              Site template. Not installed until the Droplet step.
 ```
 
 Empty packages are not created ahead of the code that needs them.
@@ -63,7 +63,7 @@ The browser is a view. For a live game it may show an optimistic move, then it m
 
 PostgreSQL is the durable record. Redis is optional later for presence or a multi-instance queue. The first deployment is one API container and one database container on a private Compose network.
 
-The web app in this milestone does not call an API. TanStack Query is mounted so the data layer has a home. Guest appearance is the only state, and it lives in `localStorage` under `playchess.guest-settings` after Zod validation. Corrupt values fall back to defaults.
+The browser calls `/api` on the same origin. Vite proxies that path to port 4318 in development. Production Fastify serves the built web app and the API together, so the session cookie can stay `SameSite=Lax`. Guest appearance still lives in `localStorage` under `playchess.guest-settings` after Zod validation. Corrupt values fall back to defaults. A signed-in session copies the account settings once, and later changes are patched to the account.
 
 ## Time controls
 
@@ -121,39 +121,46 @@ When multiplayer exists, the server clock is the one that commits. Concurrent mo
 
 ## Data model
 
-Not migrated yet. The first Prisma milestone should create these tables with foreign keys, non-guessable public ids, and indexes for player/date history, game/ply, and rating lookup.
+Migrated in `prisma/migrations/20261015120000_init`: User, Session, UserSettings, Game, and GameMove. Public ids are UUIDs except the session id, which is 32 random bytes. Local saves store the same account on both seats, with `kind` `local` and `rated` false. Online games must later refuse one account on both seats.
 
 | Entity | Core fields |
 | --- | --- |
 | User | id, username, email, password hash, status, createdAt |
-| UserSettings | userId, theme, sound, notation, accessibility |
-| Game | id, white and black user ids, status, result, termination, time-control config, start and final FEN, PGN, timestamps |
-| GameMove | gameId, ply, UCI, SAN, FEN after the move, clocks after the move |
-| Rating | userId, pool, rating, deviation, volatility |
-| GameRating | gameId, userId, before, after, delta, pool, unique so a result rates once |
-| Analysis | gameId, owner, engine name, version, config, status, createdAt |
-| AnalysisMove | analysis id, ply, score type and value, perspective, depth, principal variation |
-| Challenge | creator, hashed invite token, settings, status, expiry |
+| Session | id, userId, expiresAt |
+| UserSettings | userId, color scheme, board theme, coordinates, flip, highlights |
+| Game | id, white and black user ids, status, result, termination, time-control config, start and final FEN, PGN, clocks, timestamps |
+| GameMove | gameId, ply, UCI, SAN, FEN after the move, clocks after the move, command id |
 
-Friendship, tournament, puzzle attempt, and report wait until those features are built. The schema should not block the MVP on them.
+Rating, GameRating, Analysis, AnalysisMove, and Challenge are not in this migration. Those shapes stay in the spec until their milestones, so this schema is not a guess at them. Friendship, tournament, puzzle attempt, and report wait as well.
 
-Invitation tokens are stored as hashes. Password hashes, emails, private analysis, and moderator notes are not returned to other users. Account deletion and retention need a written policy before public launch.
+`POST /api/v1/games` replays the UCI list with chess.js. Positions, SAN, and chess endings are derived. Timeout, resignation, and an agreed draw are accepted only while the position is still ongoing. Illegal moves reject the save. Clocks are the non-negative integers the browser committed for that local game.
+
+Password hashes use Node `scrypt` (`scrypt$salt$hash`). An unknown email still runs scrypt. The session cookie is `playchess_session`, httpOnly, `SameSite=Lax`, secure in production, and lasts 30 days. Email is returned only from `/api/v1/users/me`. A game the caller does not play in is a 404. Register and login are limited to 10 attempts per minute per address, and that limit is off when `NODE_ENV=test`.
+
+Account deletion and retention are not implemented. They are required before a public launch. Deleting a user who owns a game is also blocked by the foreign key until a deletion policy exists.
 
 Rating algorithm: Glicko-2 is the candidate. It will be evaluated when ratings are implemented, then documented with before/after tests. A result updates a rating exactly once.
 
 ## HTTP and socket contracts
 
-Not implemented. Paths are reserved.
+Implemented now:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/api/v1/auth/register` | Register |
+| GET | `/api/v1/health` | Process and database, with no secrets |
+| POST | `/api/v1/auth/register` | Register and set the session cookie |
 | POST | `/api/v1/auth/login` | Sign in |
-| GET | `/api/v1/users/me` | Current profile |
-| PATCH | `/api/v1/users/me/settings` | Persist settings |
-| POST | `/api/v1/games` | Create a game |
-| GET | `/api/v1/games/:id` | Authorized game |
+| POST | `/api/v1/auth/logout` | Delete the session |
+| GET | `/api/v1/users/me` | Current profile, including email |
+| PATCH | `/api/v1/users/me/settings` | Persist appearance |
+| POST | `/api/v1/games` | Save a local transcript |
+| GET | `/api/v1/games/:id` | A game the caller plays in |
 | GET | `/api/v1/users/me/games` | Paginated history |
+
+Still reserved:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
 | POST | `/api/v1/games/import-pgn` | Import PGN |
 | GET | `/api/v1/games/:id/pgn` | Export PGN |
 | POST | `/api/v1/games/:id/analysis` | Queue analysis |
@@ -186,8 +193,8 @@ The interface is a chess room, not an admin dashboard. The board is the largest 
 - Boards: Club green, Walnut, Ocean. Tokens are CSS variables switched by `data-board-theme` on the document, and on each theme swatch so the swatches stay accurate.
 - Pieces: original geometric drawings. One set.
 - Controls that change pixels today: room colour, board theme, coordinates, flip, highlight ring on the empty e4 square of the preview, and the same tokens on the local board (last move, legal moves, and the king in check).
-- Settings persist in `localStorage` for this browser. Signed-in persistence waits for accounts.
-- Shell routes: Home, Play (preset picker), Play local, Review, History, Profile, Settings, Sign in. Review, history, profile, and sign-in explain what will arrive. They do not pretend the feature works. The local game is decided in this tab and is cleared on refresh.
+- Settings persist in `localStorage` for this browser, and on the account when someone is signed in.
+- Shell routes: Home, Play (preset picker), Play local, Review, History, Profile, Settings, Sign in. Review opens a saved game. History lists saves. The live local game is still decided in this tab and is cleared on refresh. The saved copy remains.
 - Accessibility in this shell: skip link, landmarks, button and link names, visible focus, `prefers-reduced-motion`, contrast-minded ink and muted colours, 44px menu target, whole-row checkbox labels.
 
 ## Security decisions already in force
@@ -195,7 +202,7 @@ The interface is a chess room, not an admin dashboard. The board is the largest 
 - `.env.example` holds placeholders. Production mode rejects `change-me` and `replace-with`, and requires `https` for `WEB_ORIGIN`.
 - The public schema has one key, `VITE_API_ORIGIN`. Session secrets and database URLs are not part of that schema.
 - No secrets are committed.
-- Auth, rate limits, CORS, and upload limits arrive with the API. They are not stubbed.
+- Auth uses an httpOnly session cookie. Register and login are rate limited outside tests. CORS allows `WEB_ORIGIN` with credentials. The API body limit is 1 MB. Logs redact cookies and authorization headers.
 
 ## Milestones
 
@@ -205,7 +212,7 @@ Section 15 of the specification is the working order. This delivery is milestone
 | --- | --- | --- |
 | 1 | Workspace, design system, responsive shell, CI, env validation | Done |
 | 2 | Local board, legal moves, clocks, replay | Done in this tree |
-| 3 | PostgreSQL, Prisma, accounts, settings, persistence | Waiting |
+| 3 | PostgreSQL, Prisma, accounts, settings, persistence | Done in this tree |
 | 4 | Server-authoritative multiplayer, matchmaking, challenges, reconnect | Waiting |
 | 5 | Stockfish bots, after the licence review | Waiting |
 | 6 | PGN, FEN, analysis | Waiting |
@@ -222,6 +229,6 @@ Section 15 of the specification is the working order. This delivery is milestone
 - DNS for `akshaybhatnagar.in` may still be served by Vercel while the name is registered at GoDaddy. The authoritative provider has to be identified before any record is added. Nameservers stay as they are unless you approve a change.
 - The Droplet already hosts other work. A later deploy must add a vhost and a Compose project named `playchess` without replacing global Nginx, publishing port 5432, or pruning other containers.
 - Delay modes are rejected on purpose. Adding one without a tested definition would make clocks ambiguous.
-- Guest settings are per browser, not per account. Signing in later must define how they merge.
+- Signing in applies the account's appearance once. Edits after that are written locally and patched. A guest's unsaved theme is replaced by the account settings at sign-in.
 - The home and settings boards are still starting-position previews. The local game at `/play/local` is the board that enforces the rules.
-- Local games are not saved. Refreshing the tab drops the position. Persistence waits for accounts.
+- Refreshing the tab drops the live local game. A signed-in player can save a copy first. The server checks the moves again.

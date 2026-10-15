@@ -1,6 +1,6 @@
 # Deployment plan
 
-Status: **not approved and not started**. No SSH session, Droplet change, DNS change, certificate request, or container has been made.
+Status: **the repository is ready, and this session could not reach the Droplet.** No SSH key, `doctl` config, or Droplet address is available here, so no SSH session, DNS change, certificate request, or container was made. The Compose files, Nginx template, and backup script are in the repo for the release sequence below.
 
 Target hostname: `playchess.akshaybhatnagar.in`.
 
@@ -35,7 +35,7 @@ Compose project name: `playchess`. Project directory on the server: a new direct
 | PostgreSQL | Private network only. No `5432` published on the host. Docker published ports can bypass UFW assumptions, so private services get no host port at all. |
 | Nginx | A new site file for this hostname. `nginx -t` before reload. WebSocket `Upgrade` and `Connection` headers preserved, with proxy timeouts long enough for a game socket. |
 | TLS | Let's Encrypt via Certbot after the A record resolves to this Droplet and port 80 can complete the challenge. HTTP redirects to HTTPS after the certificate exists. Renewal is checked, not assumed. |
-| Secrets | A root-owned env file on the server, mode `0600`. Never in Git, never in a `VITE_` variable. |
+| Secrets | A root-owned env file on the server, mode `0600`. Never in Git, never in a `VITE_` variable. Inside the container `API_HOST` stays `0.0.0.0` so Docker can forward the published port. The host binding is `127.0.0.1:4318` in Compose, and Nginx is the public listener. |
 | Process | Compose restart policies and a health endpoint. The API shuts down on SIGTERM. |
 | CI deploy | Not in this repository. GitHub Actions currently runs checks only. A deploy workflow waits until a manual deploy has worked and a dedicated deploy key is stored as a repository secret. |
 
@@ -63,7 +63,24 @@ The parent zone is `akshaybhatnagar.in`. The registrar has been GoDaddy, and DNS
 4. If an AAAA record exists, confirm IPv6 reaches this Droplet or leave it alone until you decide. Do not delete it as a shortcut.
 5. Wait until `dig playchess.akshaybhatnagar.in` shows the Droplet address before requesting a certificate.
 
-No addresses are invented here. The Droplet IP has not been read, because the server has not been contacted.
+Public DNS, read during this session and not changed: `akshaybhatnagar.in` is delegated to `ns1.digitalocean.com`, `ns2.digitalocean.com`, and `ns3.digitalocean.com`. `playchess.akshaybhatnagar.in` already has an A record, `206.189.129.16`, the same address as the apex. There is no AAAA record. Do not add a second A record.
+
+From this environment, TCP to that address on 22, 80, and 443 connects and then returns no data. There is no SSH key here, so the release sequence has not been run.
+
+## Server env file
+
+Create `/opt/playchess/.env` on the Droplet, owner root, mode `0600`. Generate the password and session secret there. Do not copy the local `playchess` database password. `POSTGRES_PASSWORD` and the password inside `DATABASE_URL` are the same value. Compose reads this file for both substitution and the API container.
+
+```
+NODE_ENV=production
+POSTGRES_PASSWORD=<generated>
+DATABASE_URL=postgresql://playchess:<generated>@postgres:5432/playchess
+SESSION_SECRET=<generated, at least 32 characters>
+WEB_ORIGIN=https://playchess.akshaybhatnagar.in
+API_HOST=0.0.0.0
+API_PORT=4318
+LOG_LEVEL=info
+```
 
 ## Release sequence, after approval
 
@@ -83,12 +100,22 @@ No addresses are invented here. The Droplet IP has not been read, because the se
 
 - Keep the last known-good image tag or git SHA.
 - Rollback is: point Compose at that tag, start it, and confirm health. Do not run down unrelated projects.
-- Database backups: scheduled `pg_dump` to storage that is not the same volume as the database, plus one tested restore before launch.
+- Database backups: `deploy/backup-postgres.sh` runs `pg_dump` inside the `playchess` Compose project and writes a custom-format dump outside the database volume. Schedule it on the server. Test a restore before launch.
+- Restore, against a stopped API and the same empty database:
+
+  ```bash
+  docker compose -p playchess -f /opt/playchess/docker-compose.prod.yml stop api
+  docker compose -p playchess -f /opt/playchess/docker-compose.prod.yml exec -T postgres \
+    pg_restore -U playchess --clean --if-exists --no-owner -d playchess < /var/backups/playchess/playchess-STAMP.dump
+  docker compose -p playchess -f /opt/playchess/docker-compose.prod.yml start api
+  ```
+
+- Rollback of the app is the previous git SHA. On the server: check out that SHA, rebuild the image, `docker compose -p playchess -f docker-compose.prod.yml up -d`, and confirm `/api/v1/health`. Do not run down unrelated projects.
 - Migrations ship forward. A bad migration is restored from the dump, not edited in place on production.
 
 ## Health, logs, and secrets
 
-- `GET /api/v1/health` will report process liveness without secrets or dependency passwords. It does not exist yet, because the API is a later milestone.
+- `GET /api/v1/health` reports `{ ok, db }` and does not include the database URL or secrets.
 - Logs are structured and omit tokens, passwords, and move-command secrets.
 - GitHub Actions deployment, when added, uses a dedicated SSH key, pins actions to commit SHAs, deploys a known SHA, and checks health before it finishes. It will not expose an unauthenticated deploy endpoint.
 
